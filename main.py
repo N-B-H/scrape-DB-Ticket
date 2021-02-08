@@ -1,6 +1,3 @@
-#import PyPDF2 as p
-#import tabula as t
-
 import os
 import pdfplumber
 from openpyxl import Workbook
@@ -19,12 +16,17 @@ def pdf_to_data(file_path):
 
     ### pdfplumber ###
     pdf = pdfplumber.open(file_path)
-    page = pdf.pages[0] # only first page
+    page = pdf.pages[0]  # only first page
+
+    ### page.extract_text() gives bugged results. Therefore going for the table data
+
     tables = page.extract_tables() #extract tables
-    text = page.extract_text()
-    last_line = text.splitlines()[-1]
+
+    text = page.extract_text()  # used for international tickets
+    last_line = text.splitlines()[-1]  # to extract the Ticket ID
 
     if tables[0][0][0].startswith('Positionen'): international = True
+
 
     str_lines = []
 
@@ -42,17 +44,8 @@ def pdf_to_data(file_path):
     # find items with regular expressions
     # dict with attribute as key and re-marker as value
     re_marker = {
-        "date": r'(?:(?:Gültigkeit: a.)|(?:Fahrtantritt a.)) (.*)\n', #r'Gültigkeit: a[mb] (.*)\n', #oder Fahrtantritt am 24.10.2020
+        "date": r'(?:(?:Gültigkeit: a.)|(?:Fahrtantritt a.)) (.*)\n',
         "start": 'Hinfahrt: (.*)   ',
-
-        ### BISHER ##
-        #"dest": 'Hinfahrt: .*  (.*)[,$]?',
-
-        ### 1. Versuch Tim ###
-        #"dest": 'Hinfahrt: .+   ([^,]+),.*$', #r'Hinfahrt: .*  (.*)[,$]?',
-
-        ### 2. Versuch Tim ###
-        #"dest": r'Hinfahrt:. + ([ ^,]+)(,.* | $)',
 
         "dest": r'Hinfahrt: .+   (.+?)[,\n]',
 
@@ -60,9 +53,9 @@ def pdf_to_data(file_path):
         "ID": r'\n(.+?) Seite 1 / 1$'
     }
 
-    re_marker_international = r'Gütigkeit: a.(.+).+VON ->NACH XX\n.* (.+) ->(.+)'
+    re_marker_international = r'Gütigkeit: a.(.+).+VON ->NACH XX\n.* (.+) ->(.+)' ### work in progress...
 
-    travel = {} # will have the same keys as the regular expression markers
+    travel = {}  # will have the same keys as the regular expression markers
     for attribute in re_marker:
         m = re.search(re_marker[attribute], ticket_string)
         try:
@@ -80,7 +73,7 @@ def pdf_to_data(file_path):
     #print(tickets)
     return travel
 
-
+### read all tickets in /tickets folder
 
 tickets = [pdf_to_data(file_path) for file_path in file_paths]
 for ticket in tickets: print(ticket)
@@ -105,88 +98,25 @@ def tickets_to_excel(tickets, xls_file_path):
         #sheet.cell(row=y, column=3).style = 'Currency'
         sheet.cell(row=y+1, column=3).number_format = '#,##0.00€'
 
+        sheet.cell(row=y + 1, column=4).value = tickets[y]["ID"]
 
-    #adjust cell width:
+    ### manual cell size adjustment not yet supported
+
+
+    ### autosize not yet supported
     '''
     for column_cells in sheet.columns:
-        length = max(len(str(cell.value)) for cell in column_cells)
-        worksheet.column_dimensions[column_cells[0].column].width = length
+    sheet.column_dimensions[column_cells[0].column].width = max(max_length, cur_length)
+
+        cur_length = sheet.column_dimensions[column_cells[0].column].width
+        max_length = max(len(str(cell.value)) for cell in column_cells)
+
+        #adjust
     '''
-        
+
     wb.save(xls_file_path)
 
-
+### sort all tickets by date
 tickets = sorted(tickets, key=lambda x: x['date'], reverse=True)
 
 tickets_to_excel(tickets, 'output.xlsx')
-
-'''for file_path in file_names:
-    tickets = pdf_to_data(file_path)'''
-
-
-
-'''
-tokens = {
-    "Gültigkeit: am ": str(), #datetime.date(),
-    "Hinfahrt: ": str(),
-    "Rückfahrt: ": str(),
-    "Betrag " : str() #float()
-
-}
-
-for line in str_lines:
-    for token in tokens:
-        if token in line:
-            if tokens[token] == str():
-                tokens[token] = line.replace(token, '')
-
-                if "€" in tokens[token]:
-                    i = tokens[token].index("€")
-                    tokens[token] = tokens[token][:i]
-
-print(tokens)
-'''
-
-
-### Tables ###
-'''
-tables = page.extract_tables()
-for table in tables:
-    print("|-")
-    for row in table:
-        print("--")
-        for cell in row:
-            print(cell)
-'''
-
-
-
-
-### text (bugged...) ###
-
-#text = pdf.pages[0].extract_text()
-#print(text)
-
-### lines (not working as expected) ###
-#lines = page.lines
-#print(lines)
-
-### words (not working as expected) ###
-'''
-words = page.extract_words()
-print(words)
-'''
-# open all files and read to list
-#all_files = [open(f"tickets\\{file_names[i]}", "rb") for i in range(len(file_names))]
-#all_files = [t.read_pdf(f"tickets\\{file_names[0]}", pages=1, multiple_tables=True) for i in range(len(file_names))]
-#file = all_files[0]
-
-
-#output_file = open(file_names[0].replace(".pdf",".txt"), "w+")
-#output_file = open("output.csv", "w+")
-
-#t.convert_into("example.pdf", "output.csv")
-
-
-
-
